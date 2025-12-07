@@ -1,4 +1,4 @@
-name: Build OnePlus_SukiSU Ultra All
+Name: Build OnePlus_SukiSU Ultra All
 on:
   workflow_dispatch:
     inputs:
@@ -194,11 +194,28 @@ jobs:
       - name: Apply Patches SukiSU Ultra
         run: |
           cd kernel_workspace
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
+          
+          # =========================================================
+          # LOGIC FIX: Tự động chọn branch SuSFS hợp lệ
+          # =========================================================
+          SUSFS_VERSION="gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}"
+          
+          # Nếu chọn Android 15 hoặc 16 trên Kernel 5.15, ép về branch android14 để tránh lỗi 404
+          if [ "${{ github.event.inputs.KERNEL_VERSION }}" = "5.15" ]; then
+            if [ "${{ github.event.inputs.ANDROID_VERSION }}" = "android16" ] || [ "${{ github.event.inputs.ANDROID_VERSION }}" = "android15" ]; then
+                echo "Phát hiện Android 15/16 trên Kernel 5.15. Chuyển hướng sang branch android14 để tương thích..."
+                SUSFS_VERSION="gki-android14-5.15"
+            fi
+          fi
+          
+          echo "Đang sử dụng nhánh SuSFS: $SUSFS_VERSION"
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b $SUSFS_VERSION
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
+          
           cd kernel_platform
           echo "正在给内核打susfs补丁"
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
+          # Sử dụng biến $SUSFS_VERSION thay vì input trực tiếp
+          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_$SUSFS_VERSION.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
@@ -211,7 +228,7 @@ jobs:
           fi
 
           cd ./common
-          patch -p1 < 50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch || true
+          patch -p1 < 50_add_susfs_in_$SUSFS_VERSION.patch || true
           echo "完成"
 
       - name: Apply Hide Stuff Patches
